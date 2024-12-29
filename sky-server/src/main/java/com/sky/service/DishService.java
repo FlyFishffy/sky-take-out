@@ -30,4 +30,12 @@ public interface DishService {
      * @param ids
      */
     void deleteBatch(List<Long> ids);
+
+
+    /**
+     * 起售、禁售菜品
+     * @param status
+     * @param id
+     */
+    void StartOrStop(Integer status, Long id);
 }
