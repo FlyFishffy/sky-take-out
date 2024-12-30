@@ -8,4 +8,19 @@
             #{dishId}
         </foreach>
     </select>
+    
+    <insert id="insertBatch">
+        insert into setmeal_dish (setmeal_id, dish_id, name, copies, price)
+        values
+        <foreach collection="setmealDishes" item="sd" separator=",">
+            (#{sd.setmealId}, #{sd.dishId}, #{sd.name}, #{sd.copies}, #{sd.price})
+        </foreach>
+    </insert>
+
+    <delete id="deleteBySetmealIds">
+        delete from setmeal_dish where setmeal_id in
+        <foreach collection="SetmealIds" item="sid" open="(" separator="," close=")">
+            #{sid}
+        </foreach>
+    </delete>
 </mapper>
