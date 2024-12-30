@@ -39,7 +39,7 @@ public interface DishService {
      * @param status
      * @param id
      */
-    void StartOrStop(Integer status, Long id);
+    void StartOrStopWithSetmeals(Integer status, Long id);
 
 
     /**

@@ -14,6 +14,7 @@ import com.sky.mapper.DishMapper;
 import com.sky.mapper.SetmealDishMapper;
 import com.sky.result.PageResult;
 import com.sky.service.DishService;
+import com.sky.service.SetmealService;
 import com.sky.vo.DishVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -37,6 +38,9 @@ public class DishServiceImpl implements DishService {
 
     @Autowired
     private SetmealDishMapper setmealDishMapper;
+
+    @Autowired
+    private SetmealService setmealService;
 
     @Override
     @Transactional
@@ -115,12 +119,26 @@ public class DishServiceImpl implements DishService {
      * @param id
      */
     @Override
-    public void StartOrStop(Integer status, Long id) {
+    public void StartOrStopWithSetmeals(Integer status, Long id) {
+        //更新菜品状态
         Dish dish = new Dish();
         dish.setStatus(status);
         dish.setId(id);
 
         dishMapper.update(dish);
+        //如果菜品停售，将包含该菜品的所有套餐停售
+        if(Objects.equals(dish.getStatus(), StatusConstant.DISABLE)){
+            List<Long> ids = new ArrayList<>();
+            ids.add(id);
+            List<Long> setmealIds = setmealDishMapper.getSetmealIdsByDishIds(ids);
+            if(setmealIds != null && !setmealIds.isEmpty()){
+                for(Long setmealId : setmealIds){
+                    setmealService.StartOrStop(StatusConstant.DISABLE, setmealId);
+                }
+            }
+
+        }
+
     }
 
 
