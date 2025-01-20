@@ -15,10 +15,10 @@
     <update id="update" parameterType="com.sky.entity.Orders">
         update orders
         <set>
-            <if test="cancelReason != null and cancelReason!='' ">
+            <if test="cancelReason != null and cancelReason!=''">
                 cancel_reason=#{cancelReason},
             </if>
-            <if test="rejectionReason != null and rejectionReason!='' ">
+            <if test="rejectionReason != null and rejectionReason!=''">
                 rejection_reason=#{rejectionReason},
             </if>
             <if test="cancelTime != null">
@@ -37,7 +37,7 @@
                 status = #{status},
             </if>
             <if test="deliveryTime != null">
-                delivery_time = #{deliveryTime}
+                delivery_time = #{deliveryTime},
             </if>
         </set>
         where id = #{id}
