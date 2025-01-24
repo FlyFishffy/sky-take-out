@@ -1,5 +1,6 @@
 package com.sky.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.github.pagehelper.Page;
 import com.github.pagehelper.PageHelper;
@@ -18,6 +19,7 @@ import com.sky.vo.OrderPaymentVO;
 import com.sky.vo.OrderStatisticsVO;
 import com.sky.vo.OrderSubmitVO;
 import com.sky.vo.OrderVO;
+import com.sky.websocket.WebSocketServer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,9 +29,7 @@ import org.springframework.util.CollectionUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -55,6 +55,10 @@ public class OrderServiceImpl implements OrderService {
     @Autowired
     private UserMapper userMapper;
 
+    @Autowired
+    private WebSocketServer webSocketServer;
+
+    private Orders orders;
 
     /**
      * 用户下单
@@ -92,6 +96,7 @@ public class OrderServiceImpl implements OrderService {
         orders.setConsignee(addressBook.getConsignee());
         orders.setUserId(userId);
         orders.setAddress(addressBook.getDetail());
+        this.orders = orders;
 
         orderMapper.insert(orders);
 
@@ -130,9 +135,8 @@ public class OrderServiceImpl implements OrderService {
         // 当前登录用户id
         Long userId = BaseContext.getCurrentId();
         User user = userMapper.getById(userId);
-
-        //调用微信支付接口，生成预支付交易单
-        /*JSONObject jsonObject = weChatPayUtil.pay(
+/*        //调用微信支付接口，生成预支付交易单
+        JSONObject jsonObject = weChatPayUtil.pay(
                 ordersPaymentDTO.getOrderNumber(), //商户订单号
                 new BigDecimal(0.01), //支付金额，单位 元
                 "苍穹外卖订单", //商品描述
@@ -142,38 +146,28 @@ public class OrderServiceImpl implements OrderService {
         if (jsonObject.getString("code") != null && jsonObject.getString("code").equals("ORDERPAID")) {
             throw new OrderBusinessException("该订单已支付");
         }
-
+*/
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("code","ORDERPAID");
         OrderPaymentVO vo = jsonObject.toJavaObject(OrderPaymentVO.class);
         vo.setPackageStr(jsonObject.getString("package"));
+        Integer OrderPaidStatus = Orders.PAID;//支付状态，已支付
+        Integer OrderStatus = Orders.TO_BE_CONFIRMED;  //订单状态，待接单
+        LocalDateTime check_out_time = LocalDateTime.now();//更新支付时间
+        orderMapper.updateStatus(OrderStatus, OrderPaidStatus, check_out_time, this.orders.getId());
 
-        return vo;*/
+        //通过WebSocket向客户端浏览器推送消息
+        Map map = new HashMap();
+        map.put("type", 1); //1表示来单提醒 2表示客户催单
+        map.put("orderId", orders.getId());
+        map.put("content", "订单号: " + this.orders.getNumber());
 
-        String orderNumber = ordersPaymentDTO.getOrderNumber(); //订单号
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
 
-        Long orderid = orderMapper.getorderId(orderNumber);//根据订单号查主键
-        JSONObject jsonObject = new JSONObject();//本来没有2
-
-        jsonObject.put("code", "ORDERPAID"); //本来没有3
-
-        OrderPaymentVO vo = jsonObject.toJavaObject(OrderPaymentVO.class);
-
-        vo.setPackageStr(jsonObject.getString("package"));
-
-        //为替代微信支付成功后的数据库订单状态更新，多定义一个方法进行修改
-
-        Integer OrderPaidStatus = Orders.PAID; //支付状态，已支付
-
-        Integer OrderStatus = Orders.TO_BE_CONFIRMED; //订单状态，待接单
-
-        //发现没有将支付时间 check_out属性赋值，所以在这里更新
-
-        LocalDateTime check_out_time = LocalDateTime.now();
-
-        orderMapper.updateStatus(OrderStatus, OrderPaidStatus, check_out_time, orderid);
-
-        return vo;  //  修改支付方法中的代码
-
+        return vo;
     }
+
 
     /**
      * 支付成功，修改订单状态
@@ -194,6 +188,15 @@ public class OrderServiceImpl implements OrderService {
                 .build();
 
         orderMapper.update(orders);
+
+        //通过WebSocket向客户端浏览器推送消息
+        Map map = new HashMap();
+        map.put("type", 1); //1表示来单提醒 2表示客户催单
+        map.put("orderId", ordersDB.getId());
+        map.put("content", "订单号: " + outTradeNo);
+
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
     }
 
 
@@ -445,6 +448,27 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryTime(LocalDateTime.now())
                 .build();
         orderMapper.update(orders);
+    }
+
+
+    /**
+     * 客户催单
+     * @param id
+     */
+    @Override
+    public void reminder(Long id) {
+        Orders orderDB = orderMapper.getOrderById(id);
+        if(orderDB == null){
+            throw new OrderBusinessException(MessageConstant.ORDER_STATUS_ERROR);
+        }
+
+        Map map = new HashMap();
+        map.put("type", 2);
+        map.put("orderId", orderDB.getId());
+        map.put("content", "订单号: " + orderDB.getNumber());
+
+        String json = JSON.toJSONString(map);
+        webSocketServer.sendToAllClient(json);
     }
 
 
